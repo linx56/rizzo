@@ -1,5 +1,7 @@
-<h2 class="title">
-    <span class="date">${config.outFormatter.format(post.dateCreated)}</span>&nbsp;<a href="${config.createPostLink(post)}">${post.title}</a>
-</h2>
-${post.content}
-<strong><a href="${config.createPostLink(post)}#disqus_thread">Комментарии</a></strong>
+<div class="entry">
+    <h2 class="title">
+        <span class="date">${config.outFormatter.format(post.dateCreated)}</span>&nbsp;<a href="${config.createPostLink(post)}">${post.title}</a>
+    </h2>
+    ${post.content}
+    <a href="${config.createPostLink(post)}#disqus_thread">Комментарии</a>
+</div>

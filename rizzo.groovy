@@ -40,7 +40,7 @@ CliBuilder cl = new CliBuilder(usage: 'groovy rizzo -s "source" -d "destination"
 cl.s(longOpt: 'source', args: 1, required: true, 'Location of website source')
 cl.d(longOpt: 'destination', args: 1, required: true, 'Location in which to place generated website')
 cl.p(longOpt: 'port', args: 1, required: false, 'Serve at port')
-cl.r(longOpt: 'regenerate', args: 1, required: false, 'Regenerate pages and posts')
+cl.r(longOpt: 'regenerate', args: 0, required: false, 'Regenerate pages and posts')
 
 def opt = cl.parse(args)
 
@@ -216,6 +216,10 @@ def ant = new AntBuilder()
 new File("${opt.d}/css/").mkdirs()
 ant.copy(todir: "${opt.d}/css/") {
     fileset(dir: "${opt.s}/css/")
+}
+new File("${opt.d}/js/").mkdirs()
+ant.copy(todir: "${opt.d}/js/") {
+    fileset(dir: "${opt.s}/js/")
 }
 new File("${opt.d}/images/").mkdirs()
 ant.copy(todir: "${opt.d}/images/") {
