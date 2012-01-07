@@ -1,11 +1,11 @@
 <entry>
-    <title>$postTitle</title>
-    <id>$itemId</id>
-    <published>$itemDate</published>
-    <updated>$itemUpdatedDate</updated>
-    <link href="$postLink"/>
-    <summary>$postSummary</summary>
+    <title>${post.title}</title>
+    <id>tag:${config.site.url},${config.feedFormatter.format(post.dateCreated)}:/${post.name}/</id>
+    <published>${config.feedFormatter.format(post.dateCreated)}</published>
+    <updated>${config.feedFormatter.format(post.lastUpdated)}</updated>
+    <link href="${config.createPostLink(post)}"/>
+    <summary>${post.summary}</summary>
     <content type="html">
-	    $postContent
+	    ${post.content}
     </content>
 </entry>

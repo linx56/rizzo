@@ -1,10 +1,13 @@
 site {
-	domain = "www.replace.with.your.domain.com"
-	base = "" // use if the site should be relative to a top level domain - example: /mypath
-	name = "The Name Of Your Site"
+	url = "http://localhost:1234"
+//	url = "http://www.garmash.org"
+	base = ""
+	name = "Max Garmash"
+    googleAnalyticsEnabled = true
+    GATracker = "UA-20341639-4"
 }
 
 author {
-	name = "Your Name"
-	email = "your@email.com"
+	name = "Max Garmash"
+	email = "max.garmash@gmail.com"
 }

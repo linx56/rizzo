@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-  <id>$feedUrl</id>
-  <title>$feedTitle</title>
-  <updated>$lastUpdated</updated>
-  <link rel="self" href="$feedUrl" type="application/atom+xml" />
+  <id>${feedUrl}</id>
+  <title>${config.site.name}</title>
+  <updated>${config.feedFormatter.format(new Date())}</updated>
+  <link rel="self" href="${feedUrl}" type="application/atom+xml" />
   <author>
-    <name>$authorName</name>
-    <uri>http://$siteDomain</uri>
-    <email>$authorEmail</email>
+    <name>${config.author.name}</name>
+    <uri>${config.site.url}</uri>
+    <email>${config.author.email}</email>
   </author>
     $entries
 </feed>

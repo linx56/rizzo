@@ -1,0 +1,9 @@
+<table>
+    <% posts.each { post ->
+    print '''
+    <tr>
+        <td valign="top" class="date"><span class="date">''' + config.outFormatter.format(post.dateCreated) + '''</span></td>
+        <td valign="top"><a href="''' + config.createPostLink(post) + '''">''' + post.title + '''</a></td>
+    </tr>'''
+    } %>
+</table>

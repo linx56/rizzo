@@ -1,268 +1,239 @@
-import java.text.SimpleDateFormat
-import groovy.text.SimpleTemplateEngine
 import com.petebevin.markdown.MarkdownProcessor
+import groovy.text.SimpleTemplateEngine
+import java.text.DateFormatSymbols
+import java.text.SimpleDateFormat
+import java.util.regex.Pattern
+import org.mortbay.jetty.Server
+import org.mortbay.jetty.servlet.Context
+import org.mortbay.jetty.handler.ResourceHandler
+import org.mortbay.jetty.handler.HandlerList
+import org.mortbay.jetty.handler.DefaultHandler
+import org.mortbay.jetty.Handler
+import org.mortbay.jetty.servlet.ServletHolder
+import groovy.servlet.TemplateServlet
 
+@GrabResolver(name='codehaus-release-repo', root='http://repository.codehaus.org')
 @Grab('com.madgag:markdownj-core:0.4.1')
+@Grab(group='org.mortbay.jetty', module='jetty-embedded', version='6.1.11')
+
+
 
 class Post {
-	String title
-	String name
-	Date dateCreated
-	Date lastUpdated
-	String summary
-	String content
-	List tags = []
+    String title
+    String name
+    Date dateCreated
+    Date lastUpdated
+    String summary
+    String content
+    List tags = []
 }
 
 class Tag {
-	String name
-	List posts = []	
-	String toString(){ name }
+    String title
+    String name
+    List posts = []
+    String toString() { name }
 }
 
-def cl = new CliBuilder(usage: 'groovy rizzo -s "source" -d "destination"')
+CliBuilder cl = new CliBuilder(usage: 'groovy rizzo -s "source" -d "destination"')
 
-cl.s(longOpt:'source', args:1, required:true, 'Location of website source')
-cl.d(longOpt:'destination', args:1, required:true, 'Location in which to place generated website')
+cl.s(longOpt: 'source', args: 1, required: true, 'Location of website source')
+cl.d(longOpt: 'destination', args: 1, required: true, 'Location in which to place generated website')
+cl.p(longOpt: 'port', args: 1, required: false, 'Serve at port')
+cl.r(longOpt: 'regenerate', args: 1, required: false, 'Regenerate pages and posts')
 
 def opt = cl.parse(args)
 
-if(!opt){
-	return
-} else {
-    def posts = []
-    def tags = []
-    SimpleDateFormat formatter = new SimpleDateFormat("MM-dd-yyyy h:mm a")
-    SimpleDateFormat outputFormatter = new SimpleDateFormat("EEEE, MMMMM d, yyyy 'at' h:mm a")
-    SimpleDateFormat archiveFormatter = new SimpleDateFormat("MMMMM d, yyyy")
-    SimpleDateFormat feedFormatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
-    SimpleDateFormat itemIdDateFormatter = new SimpleDateFormat("yyyy-MM-dd")
+if (!opt) {
+    return
+}
 
-    def sourceExists = new File("${opt.d}").exists()
-    def siteConfig = new ConfigSlurper().parse(new File("${opt.s}/site-config.groovy").toURL())
-    def metadata
+def cfg = new ConfigSlurper().parse(new File("${opt.s}/site-config.groovy").toURL())
 
-    if(!new File("${opt.s}/meta.groovy").exists()){
-	    new File("${opt.s}/meta.groovy").write("published = \"${formatter.format(new Date())}\"")
+String[] months = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
+DateFormatSymbols dfs = new DateFormatSymbols(new Locale("ru"));
+dfs.setMonths(months);
+cfg.outWithMonthFormatter = new SimpleDateFormat("d MMMM yyyy 'г.'", dfs)
+cfg.yearFormatter = new SimpleDateFormat("yyyy")
+cfg.monthFormatter = new SimpleDateFormat("MM")
+cfg.inFormatter = cfg.inFormatter ?: new SimpleDateFormat("dd-MM-yyyy hh:mm")
+cfg.outFormatter = cfg.outFormatter ?: new SimpleDateFormat("dd.MM.yyyy")
+cfg.feedFormatter = cfg.feedFormatter ?: new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+cfg.itemIdDateFormatter = cfg.itemIdDateFormatter ?: new SimpleDateFormat("yyyy-MM-dd")
+cfg.createPostLink = { post ->
+    cfg.site.url+cfg.site.base+"/"+cfg.createPostPath(post)
+}
+cfg.createPostPath = { post ->
+    "${cfg.yearFormatter.format(post.dateCreated)}/${cfg.monthFormatter.format(post.dateCreated)}/${post.name}"
+}
+cfg.createTagLink = { tag ->
+    cfg.site.url+cfg.site.base+"/tags/"+tag.name+"/"
+}
+
+def charTable = ['а':'a', 'б':'b', 'в':'v', 'г':'g', 'д':'d', 'е':'e','ё':'e', 'ж':'zh', 'з':'z', 'и':"i", 'й':'i',
+        'к':'k', 'л':'l', 'м':'m', 'н':'n','о':'o', 'п': 'p', 'р':'r', 'с':'s', 'т':'t', 'у':'u', 'ф':'f', 'х':'h',
+        'ц':'c', 'ч':'ch','ш':'sh', 'щ':'sh', 'ъ':'\'', 'ы':'y', 'ь':'\'', 'э':'e', 'ю':'u', 'я':'ya'];
+def whiteSpaces = Pattern.compile('\\s+')
+
+def normalize = {String str ->
+    StringBuilder sb = new StringBuilder(str.toLowerCase().replaceAll(whiteSpaces, '-'))
+    StringBuilder out = new StringBuilder(sb.size())
+    sb.toList().each { c ->
+        out.append(charTable[c] ?: c)
     }
-    metadata = new ConfigSlurper().parse(new File("${opt.s}/meta.groovy").toURL())
+    out.toString()
+}
 
-    Date lastPublished = formatter.parse(metadata.published)
+def destExist = new File("${opt.d}").exists()
 
-    def begin = "${opt.s}/posts/"; def h_begin = "${opt.s}/pages/"
+if (!destExist){
+    new File("${opt.d}").mkdirs();
+}
 
-    def home = new File("${opt.s}/templates/home.html")
-    def home_mid = new File("${opt.s}/templates/home_mid.html")
-    def page = new File("${opt.s}/templates/page.html")
-    def post = new File("${opt.s}/templates/post.html")
-    def feed = new File("${opt.s}/templates/feed.xml"); def entry = new File("${opt.s}/templates/entry.xml")
+regenerate = opt.r || !destExist
 
-	def fozziwig = new SimpleTemplateEngine()
-	def mdProcessor = new MarkdownProcessor()
-	
-	new File("${opt.d}/archives/").mkdirs()
-	
-	new File("${h_begin}").eachFile { file ->
-	    if(file.name.endsWith('.html')) {
-	        def name = file.name[0 .. file.name.lastIndexOf('.')-1]
-            List pageText = file.readLines()
-            def currentPost = new Post(title:pageText[0], name:name, lastUpdated:formatter.parse(pageText[1].toString()))
-	        pageText = pageText[2..-1]
-		    currentPost.content = pageText.join("\n")
-    		if(currentPost.lastUpdated > lastPublished || !sourceExists){
-	    		def scrooge = ["postTitle" : currentPost.title, "postName" : currentPost.name, "content" : currentPost.content, "lastUpdated" : """
-			<br />
-	        <p style="font-size:smaller; text-align:right;">(Updated ${outputFormatter.format(currentPost.lastUpdated)})</p>""", "config" : siteConfig]
-		    	new File("${opt.d}/${name}.html").write("${fozziwig.createTemplate(page).make(scrooge)}")
-            }
+if (!new File("${opt.s}/meta.groovy").exists()) {
+    new File("${opt.s}/meta.groovy").write("published = \"${inFormatter.format(new Date())}\"")
+}
+
+def metadata = new ConfigSlurper().parse(new File("${opt.s}/meta.groovy").toURL())
+
+Date lastPublished = cfg.inFormatter.parse(metadata.published)
+
+cfg.postFiles = new File("${opt.s}/posts/")
+cfg.pageFiles = new File("${opt.s}/pages/")
+cfg.baseTmpl = new File("${opt.s}/templates/base.html")
+cfg.tagTmpl = new File("${opt.s}/templates/tag.html")
+cfg.tagsTmpl = new File("${opt.s}/templates/tags.html")
+cfg.indexEntryTmpl = new File("${opt.s}/templates/entry.html")
+cfg.postTmpl = new File("${opt.s}/templates/post.html")
+cfg.feedTmpl = new File("${opt.s}/templates/feed.xml");
+cfg.entryTmpl = new File("${opt.s}/templates/entry.xml")
+cfg.siteFeed = new File("${opt.d}/feed.xml")
+cfg.templateEngine = new SimpleTemplateEngine()
+cfg.mdProcessor = new MarkdownProcessor()
+
+def posts = []
+def tags = []
+
+//Writing pages
+cfg.pageFiles.eachFileMatch(~/.*[\.html|\.md]/) { file ->
+    def name = file.name[0..file.name.lastIndexOf('.') - 1]
+    List pageText = file.readLines()
+    def page = new Post(title: pageText[0], name: name, lastUpdated: cfg.inFormatter.parse(pageText[1].toString()))
+    pageText = pageText[2..-1]
+    page.content = file.name.endsWith('.md') ? cfg.mdProcessor.markdown(pageText.join("\n")) : pageText.join("\n")
+    if (page.lastUpdated > lastPublished || regenerate) {
+        def model = ["content": page.content, "config": cfg, "commentsEnabled" : false, "title": page.title]
+        def pagePath = "${opt.d}/${name}"
+        new File(pagePath).mkdirs()
+        new File("$pagePath/index.html").write("${cfg.templateEngine.createTemplate(cfg.baseTmpl).make(model)}")
+    }
+}
+
+//Writing posts
+cfg.postFiles.eachFileMatch(~/.*[\.html|\.md]/) { file ->
+    def name = file.name[0..file.name.lastIndexOf('.') - 1]
+    List postText = file.readLines()
+    def post = new Post(title: postText[0], name: name, dateCreated: cfg.inFormatter.parse(postText[1].toString()),
+            lastUpdated: cfg.inFormatter.parse(postText[2].toString()), summary: postText[4])
+    List tagList = postText[3].split(", ") as List
+    tagList.each { post.tags << new Tag(title: "$it", name: normalize("$it"), posts: [post]) }
+    postText = postText[5..-1]
+    post.content = file.name.endsWith('.md') ? cfg.mdProcessor.markdown(postText.join("\n")) : postText.join("\n")
+    posts << post
+
+    post.tags.each { tag ->
+        def currentTag = tags.find {it.name.equals(tag.name)}
+        if (currentTag) {
+            currentTag.posts << post
+        } else {
+            tags << tag
         }
     }
 
-	new File("${h_begin}").eachFile { file ->
-	    if(file.name.endsWith('.md')) {
-	        def name = file.name[0 .. file.name.lastIndexOf('.')-1]
-            List pageText = file.readLines()
-            def currentPost = new Post(title:pageText[0], name:name, lastUpdated:formatter.parse(pageText[1].toString()))
-	        pageText = pageText[2..-1]
-		    currentPost.content = mdProcessor.markdown(pageText.join("\n"))
-    		if(currentPost.lastUpdated > lastPublished || !sourceExists){
-	    		def scrooge = ["postTitle" : currentPost.title, "postName" : currentPost.name, "content" : currentPost.content, "lastUpdated" : """
-			<br />
-	        <p style="font-size:smaller; text-align:right;">(Updated ${outputFormatter.format(currentPost.lastUpdated)})</p>""", "config" : siteConfig]
-		    	new File("${opt.d}/${name}.html").write("${fozziwig.createTemplate(page).make(scrooge)}")
-            }
-        }
+    def postModel = ["post": post, "config": cfg]
+    if (post.lastUpdated > lastPublished || regenerate) {
+        postModel = ["content": "${cfg.templateEngine.createTemplate(cfg.postTmpl).make(postModel)}", "config": cfg, "commentsEnabled" : true,
+                "title": post.title]
+        def postPath = "${opt.d}/${cfg.createPostPath(post)}"
+        new File(postPath).mkdirs()
+        new File(postPath + "/index.html").write("${cfg.templateEngine.createTemplate(cfg.baseTmpl).make(postModel)}")
     }
+}
 
-	new File("${begin}").eachFile { file ->
-	    if(file.name.endsWith('.html')) {
-    	    def name = file.name[0 .. file.name.lastIndexOf('.')-1]
-            List postText = file.readLines()
-            def currentPost = new Post(title:postText[0], name:name, dateCreated:formatter.parse(postText[1].toString()), lastUpdated:formatter.parse(postText[2].toString()), summary:postText[4])
-            List tagList = postText[3].split(", ") as List
-            tagList.each { currentPost.tags << new Tag(name:"$it") }
-            postText = postText[5..-1]
-	        currentPost.content = postText.join("\n")
-	        posts << currentPost
-    	    def postTags = null
-            if(!currentPost.tags.isEmpty()){
-                postTags = "; "
-                postTags += currentPost.tags.sort{it.name}.collect{"<a href=\"/tags/${it.name}.html\">${it.name}</a>"}.join(", ")
-            }
-            currentPost.tags.each { postTag ->
-                def currentTag
-                if(!tags.find{it.name.contains("$postTag")}){
-                    currentTag = new Tag(name:postTag)
-                    currentTag.posts << currentPost
-	                tags << currentTag
-                } else {
-	                currentTag = tags.find{it.name.contains("$postTag")}
-	                currentTag.posts << currentPost
-                }
-            }
-            if(currentPost.lastUpdated > lastPublished || !sourceExists){
-                def scrooge = ["postTitle" : currentPost.title, "postName" : currentPost.name, "postDate" : outputFormatter.format(currentPost.dateCreated), "postTags" : postTags ?: "", "content" : currentPost.content, "config" : siteConfig]
-                new File("${opt.d}/archives/${currentPost.name}.html").write("${fozziwig.createTemplate(post).make(scrooge)}")
-            }
-        }
+//Writing tags
+new File("${opt.d}/tags/").mkdirs()
+tags.each { tag ->
+    tag.posts = tag.posts.sort { it.dateCreated }.reverse()
+    def model = ["config": cfg, "posts" : tag.posts]
+    String content = cfg.templateEngine.createTemplate(cfg.tagTmpl).make(model).toString()
+    model = ["content": content, "config": cfg, "commentsEnabled" : false, "title": tag.title]
+    def tagPath = "${opt.d}/tags/${tag.name}"
+    new File(tagPath).mkdirs()
+    new File("${tagPath}/index.html").write("${cfg.templateEngine.createTemplate(cfg.baseTmpl).make(model)}")
+
+    def max = tag.posts.size() > 20 ? 19 : tag.posts.size() - 1
+    def tagFeed = new File("${opt.d}/tags/${tag.name}/feed.xml")
+    String entries = ""
+    tag.posts[0..max].each { post ->
+        def feedEntryModel = ["post": post, "config": cfg]
+        entries += "${cfg.templateEngine.createTemplate(cfg.entryTmpl).make(feedEntryModel)}"
     }
+    def tagFeedModel = ["config": cfg, "entries": entries, "feedUrl": "${cfg.createTagLink(tag)}/feed.xml"]
+    tagFeed.write("${cfg.templateEngine.createTemplate(cfg.feedTmpl).make(tagFeedModel)}")
+}
 
-	new File("${begin}").eachFile { file ->
-	    if(file.name.endsWith('.md')) {
-		    def name = file.name[0 .. file.name.lastIndexOf('.')-1]
-    	    List postText = file.readLines()
-	        def currentPost = new Post(title:postText[0], name:name, dateCreated:formatter.parse(postText[1].toString()), lastUpdated:formatter.parse(postText[2].toString()), summary:postText[4])
-	        List tagList = postText[3].split(", ") as List
-    	    tagList.each { currentPost.tags << new Tag(name:"$it") }
-	        postText = postText[5..-1]
-	        currentPost.content = mdProcessor.markdown(postText.join("\n"))
-    	    posts << currentPost
-	        def postTags = null
-	        if(!currentPost.tags.isEmpty()){
-    	        postTags = "; "
-	            postTags += currentPost.tags.sort{it.name}.collect{"<a href=\"/tags/${it.name}.html\">${it.name}</a>"}.join(", ")
-    	    }
-	        currentPost.tags.each { postTag ->
-	            def currentTag
-	            if(!tags.find{it.name.contains("$postTag")}){
-    	            currentTag = new Tag(name:postTag)
-	                currentTag.posts << currentPost
-	                tags << currentTag
-	            } else {
-    	            currentTag = tags.find{it.name.contains("$postTag")}
-	                currentTag.posts << currentPost
-	            }
-    	    }
-	        if(currentPost.lastUpdated > lastPublished || !sourceExists){
-                def scrooge = ["postTitle" : currentPost.title, "postName" : currentPost.name, "postDate" : outputFormatter.format(currentPost.dateCreated), "postTags" : postTags ?: "", "content" : currentPost.content, "config" : siteConfig]
-	            new File("${opt.d}/archives/${currentPost.name}.html").write("${fozziwig.createTemplate(post).make(scrooge)}")
-    	    }
-    	}
-    }
+//Writing index.html
+posts = posts.sort { it.dateCreated }.reverse()
+File rootIndex = new File("${opt.d}/index.html")
+String indexContent = ""
+def max = posts.size() > 5 ? 4 : posts.size() - 1
+posts[0..max].each { post ->
+    def postModel = ["post": post, "config": cfg]
+    indexContent += cfg.templateEngine.createTemplate(cfg.indexEntryTmpl).make(postModel)
+}
+def indexModel = ["content": indexContent, "config": cfg, "commentsEnabled" : false, "title": ""]
+rootIndex.write("${cfg.templateEngine.createTemplate(cfg.baseTmpl).make(indexModel)}")
 
-    def gonzo = new AntBuilder()
-    new File("${opt.d}/css/").mkdirs()
-    gonzo.copy(todir: "${opt.d}/css/") {
-	    fileset(dir : "${opt.s}/css/")
-    }
+//Writing tags index
+def tagsModel = ["config": cfg, "tags": tags]
+def tagsContent = "${cfg.templateEngine.createTemplate(cfg.tagsTmpl).make(tagsModel)}"
+tagsModel = ["config": cfg, "content": tagsContent, "commentsEnabled" : false, "title": ""]
+new File("${opt.d}/tags/index.html").write("${cfg.templateEngine.createTemplate(cfg.baseTmpl).make(tagsModel)}")
 
-    new File("${opt.d}/images/").mkdirs()
-    gonzo.copy(todir: "${opt.d}/images/") {
-    	fileset(dir : "${opt.s}/images/")
-    }
+//Writing feeds
+max = posts.size() > 20 ? 19 : posts.size() - 1
+String feedEntries = ""
+posts[0..max].each { post ->
+    def feedItemModel = ["post": post, "config": cfg]
+    feedEntries += "${cfg.templateEngine.createTemplate(cfg.entryTmpl).make(feedItemModel)}"
+}
+def feedModel = ["feedUrl": "${cfg.site.url}${cfg.site.base}/feed.xml", "entries": feedEntries, "config": cfg]
+cfg.siteFeed.write("${cfg.templateEngine.createTemplate(cfg.feedTmpl).make(feedModel)}")
 
-    new File("${opt.d}/files/").mkdirs()
-    gonzo.copy(todir: "${opt.d}/files/") {
-    	fileset(dir : "${opt.s}/files/")
-    }
+def ant = new AntBuilder()
+new File("${opt.d}/css/").mkdirs()
+ant.copy(todir: "${opt.d}/css/") {
+    fileset(dir: "${opt.s}/css/")
+}
+new File("${opt.d}/images/").mkdirs()
+ant.copy(todir: "${opt.d}/images/") {
+    fileset(dir: "${opt.s}/images/")
+}
 
-    new File("${opt.d}/tags/").mkdirs()
-    tags.each{ tag ->
-	    tag.posts = tag.posts.sort{ it.dateCreated }.reverse()
-        String tagMid = """
-	             <p></p>
-	             <table>
-	    """
-	    tag.posts.each { currentPost ->
-	    	tagMid += """
-				     <tr>
-	                     <td valign="top" class="date"><span class="arc_date">${archiveFormatter.format(currentPost.dateCreated)}</span></td>
-	                     <td valign="top"><a href="/archives/${currentPost.name}.html">${currentPost.title}</a></td>
-	                 </tr>
-	    	"""
-	    }
-		tagMid += """
-	             </table>
-	    """
-	
-	    def dickens = ["postTitle" : "Archives for &ldquo;${tag.name}&rdquo;", "postName" : tag.name, "postUpdate" : "", "content" : tagMid, "config": siteConfig]
-	
-        new File("${opt.d}/tags/${tag.name}.html").write("${fozziwig.createTemplate(page).make(dickens)}")
-        
-        def max = tag.posts.size() > 20 ? 19 : tag.posts.size() - 1
-		def tagFeed = new File("${opt.d}/tags/${tag.name}.xml")
-		String entries = ""
-		tag.posts[0..max].each { cp ->
-		        def itemIdDate = itemIdDateFormatter.format(cp.dateCreated)
-			    def cratchit = ["postTitle" : cp.title, "postLink" : "http://${siteConfig.site.domain}${siteConfig.site.base}/archives/${cp.name}.html", "postSummary" : cp.summary, "postContent" : cp.content, "itemId" : "tag:${siteConfig.site.domain},${itemIdDate}:/${cp.name}/", "itemDate" : feedFormatter.format(cp.dateCreated), "itemUpdatedDate" : feedFormatter.format(cp.lastUpdated)]
-                entries += "${fozziwig.createTemplate(entry).make(cratchit)}"
-		}
-		def tim = ["siteDomain" : siteConfig.site.domain, "feedUrl" : "http://${siteConfig.site.domain}${siteConfig.site.base}/tags/${tag.name}.xml", "tagName" : tag.name, "feedTitle" : "${siteConfig.site.name} : ${tag.name}", "siteName" : siteConfig.site.name, "lastUpdated" : feedFormatter.format(new Date()), "authorName" : siteConfig.author.name, "authorEmail" : siteConfig.author.email, "entries" : entries]
-		tagFeed.write("${fozziwig.createTemplate(feed).make(tim)}")
-    }
+new File("${opt.s}/meta.groovy").delete()
+new File("${opt.s}/meta.groovy").write("published = \"${cfg.inFormatter.format(new Date())}\"")
 
-    posts = posts.sort{ it.dateCreated }.reverse()
-    File rootIndex = new File("${opt.d}/index.html")
-    String homeContent = ""
-    def max = posts.size() > 5 ? 4 : posts.size() - 1
-    posts[0..max].each { currentPost ->
-	    def postTags = null
-        if(!currentPost.tags.isEmpty()){
-            postTags = "; "
-            postTags += currentPost.tags.sort{it.name}.collect{"<a href=\"/${it.name}/\">${it.name}</a>"}.join(", ")
-        }
-        def pd = ["postTitle" : currentPost.title, "postLink" : "http://${siteConfig.site.domain}${siteConfig.site.base}/archives/${currentPost.name}.html", "postDate" : outputFormatter.format(currentPost.dateCreated), "postTags" : postTags ?: "", "content" : currentPost.content]
-        homeContent += fozziwig.createTemplate(home_mid).make(pd)
-    }
-
-    def fred = ["content" : homeContent, "config" :siteConfig]
-    rootIndex.write("${fozziwig.createTemplate(home).make(fred)}")
-    String tagList = "<p>"
-    tagList += tags.sort{it.name}.collect{"<a href=\"/${it.name}/\">${it.name}</a>&nbsp;(${it.posts.size()})"}.join(" &nbsp; &nbsp; ")
-    tagList += "</p>"
-    def thingsNSuch = ["postTitle" : "Tags", "postName" : "tags", "config" : siteConfig, "postUpdate" : "", "content" : tagList]
-    new File("${opt.d}/tags.html").write("${fozziwig.createTemplate(page).make(thingsNSuch)}")
-    new File("${opt.d}/archives/").mkdirs()
-    File arcIndex = new File("${opt.d}/archives.html")
-    String archiveContent = "<table>"
-    posts.each { currentPost ->
-    	archiveContent += """
-			     <tr>
-                     <td valign="top" class="date"><span class="arc_date">${archiveFormatter.format(currentPost.dateCreated)}</span></td>
-                     <td valign="top"><a href="/archives/${currentPost.name}.html">${currentPost.title}</a></td>
-                 </tr>
-    	"""
-    }
-
-    archiveContent += """
-             <p></p>
-             <table>
-    """
-    def archive = ["postTitle" : "Archives", "postName" : "archives", "postUpdate" : "", "content" : archiveContent, "config" : siteConfig]
-    arcIndex.write("${fozziwig.createTemplate(page).make(archive)}")
-    def siteFeed = new File("${opt.d}/feed.xml")
-    max = posts.size() > 20 ? 19 : posts.size() - 1
-    String feedEntries = ""
-	posts[0..max].each { currentPost ->
-		def itemIdDate = itemIdDateFormatter.format(currentPost.dateCreated)
-		def cratchit = ["postTitle" : currentPost.title, "postSummary" : currentPost.summary, "postContent" : currentPost.content, "itemId" : "tag:${siteConfig.site.domain},${itemIdDate}:/archives/${currentPost.name}.html", "postLink" : "http://${siteConfig.site.domain}${siteConfig.site.base}/archives/${currentPost.name}.html", "itemDate" : feedFormatter.format(currentPost.dateCreated), "itemUpdatedDate" : feedFormatter.format(currentPost.lastUpdated)]
-        feedEntries += "${fozziwig.createTemplate(entry).make(cratchit)}"
-    }
-
-    def feedBits = ["feedUrl" : "http://${siteConfig.site.domain}${siteConfig.site.base}/feed.xml", "feedTitle" : siteConfig.site.name, "lastUpdated" : feedFormatter.format(new Date()), "authorName" : siteConfig.author.name, "authorEmail" : siteConfig.author.email, "entries" : feedEntries, "siteDomain" : siteConfig.site.domain]
-    siteFeed.write("${fozziwig.createTemplate(feed).make(feedBits)}")
-
-    new File("${opt.s}/meta.groovy").delete()
-    new File("${opt.s}/meta.groovy").write("published = \"${formatter.format(new Date())}\"")
-
-  }
+if (opt.p){
+    def server = new Server(Integer.parseInt(opt.p))
+    def root = new Context(server,"/",Context.SESSIONS)
+    ResourceHandler resourceHandler = new ResourceHandler()
+    resourceHandler.setWelcomeFiles(['index.html'] as String[])
+    resourceHandler.setResourceBase("./published");
+    HandlerList handlers = new HandlerList();
+    handlers.setHandlers([resourceHandler, new DefaultHandler()] as Handler[]);
+    server.setHandler(handlers);
+    root.addServlet(new ServletHolder(new TemplateServlet()), "*.html")
+    server.start()
+}

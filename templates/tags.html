@@ -1,0 +1,3 @@
+<p>
+   <% print tags.sort {it.name}.collect {'<a href="' + config.createTagLink(it) + '">' + it.name + '</a>&nbsp;(' + it.posts.size() + ')'}.join('&nbsp;&nbsp;')%>
+</p>
