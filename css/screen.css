@@ -27,8 +27,7 @@ p {
 }
 
 table {
-    font-size: inherit;
-    font: 100%;
+    font-size: 100%;
 }
 
 /*****************************************************************************/
@@ -41,28 +40,30 @@ table {
     font-size: 110%;
     text-align: justify;
     width: 50em;
-    margin: 2em auto 2em auto;
+    margin: 0 auto 2em auto;
     line-height: 1.5em;
 }
 
 #title {
     margin: 0 auto;
+    padding-top: 30px;
     text-align: center;
 }
-#title a{
+
+#title a {
     font-size: 45px;
     text-decoration:none;
     color: black;
-    /*font-family: serif;*/
-}
-#title .text{
-    margin-top: 5px;
-    font-size: 18px;
-    /*font-family: serif;*/
 }
 
-#logo{
-    z-index: -1;
+#title .text {
+    margin-top: 5px;
+    font-size: 18px;
+}
+
+#logo {
+    position: relative;
+    top: -25px;
     margin: 0 auto;
     width: 66px;
     height: 42px;
@@ -70,17 +71,16 @@ table {
 }
 
 .site .menu {
-    position: relative;
-    top: -33px;
     height: 20px;
     text-align: center;
-    margin: 0 auto;
+    margin: 10px auto 0;
 }
 
 .site .menu .spacer {
     display: inline-block;
     width: 100px;
 }
+
 .site .menu a {
     display: inline-block;
     color: black;
@@ -89,6 +89,7 @@ table {
     font-weight: bold;
     vertical-align: middle;
 }
+
 .site .menu a:before {
     color: white;
     border: 0;
@@ -100,6 +101,7 @@ table {
     border: 0;
     content: "}";
 }
+
 .site .menu a:hover:before {
     color: black;
 }
@@ -111,7 +113,6 @@ table {
 .site .menu a:hover {
     color: #ff6600;
 }
-
 
 .site .footer {
     font-size: 80%;
@@ -152,6 +153,7 @@ table {
     text-decoration: none;
 
 }
+
 .title a:hover {
     color: #1122cc;
     text-decoration: underline;
@@ -165,4 +167,8 @@ table {
 
 .entry {
     margin-bottom: 10px;
+}
+
+.tagdate {
+    padding-right: 10px;
 }

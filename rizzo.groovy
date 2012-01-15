@@ -41,6 +41,7 @@ cl.s(longOpt: 'source', args: 1, required: true, 'Location of website source')
 cl.d(longOpt: 'destination', args: 1, required: true, 'Location in which to place generated website')
 cl.p(longOpt: 'port', args: 1, required: false, 'Serve at port')
 cl.r(longOpt: 'regenerate', args: 0, required: false, 'Regenerate pages and posts')
+cl.n(longOpt: 'newpost', args: 0, required: false, 'Create new post')
 
 def opt = cl.parse(args)
 
@@ -53,21 +54,21 @@ def cfg = new ConfigSlurper().parse(new File("${opt.s}/site-config.groovy").toUR
 String[] months = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
 DateFormatSymbols dfs = new DateFormatSymbols(new Locale("ru"));
 dfs.setMonths(months);
-cfg.outWithMonthFormatter = new SimpleDateFormat("d MMMM yyyy 'г.'", dfs)
+cfg.outWithMonthFormatter = new SimpleDateFormat("d MMMM yyyy 'г.' HH:mm", dfs)
 cfg.yearFormatter = new SimpleDateFormat("yyyy")
 cfg.monthFormatter = new SimpleDateFormat("MM")
-cfg.inFormatter = cfg.inFormatter ?: new SimpleDateFormat("dd-MM-yyyy hh:mm")
+cfg.inFormatter = cfg.inFormatter ?: new SimpleDateFormat("dd-MM-yyyy HH:mm")
 cfg.outFormatter = cfg.outFormatter ?: new SimpleDateFormat("dd.MM.yyyy")
 cfg.feedFormatter = cfg.feedFormatter ?: new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
 cfg.itemIdDateFormatter = cfg.itemIdDateFormatter ?: new SimpleDateFormat("yyyy-MM-dd")
 cfg.createPostLink = { post ->
-    cfg.site.url+cfg.site.base+"/"+cfg.createPostPath(post)
+    cfg.site.base+'/'+cfg.createPostPath(post)
 }
 cfg.createPostPath = { post ->
     "${cfg.yearFormatter.format(post.dateCreated)}/${cfg.monthFormatter.format(post.dateCreated)}/${post.name}"
 }
 cfg.createTagLink = { tag ->
-    cfg.site.url+cfg.site.base+"/tags/"+tag.name+"/"
+    cfg.site.base+'/tags/'+tag.name+'/'
 }
 
 def charTable = ['а':'a', 'б':'b', 'в':'v', 'г':'g', 'д':'d', 'е':'e','ё':'e', 'ж':'zh', 'з':'z', 'и':"i", 'й':'i',
@@ -112,6 +113,26 @@ cfg.entryTmpl = new File("${opt.s}/templates/entry.xml")
 cfg.siteFeed = new File("${opt.d}/feed.xml")
 cfg.templateEngine = new SimpleTemplateEngine()
 cfg.mdProcessor = new MarkdownProcessor()
+
+if (opt.n){
+    System.in.withReader {
+        print  'Post title: '
+        def title = it.readLine()
+        print  'Post name: '
+        def name = it.readLine()
+        if (!name || name.trim().isEmpty()){
+            name = title
+        }
+        name = normalize(name);
+        print  'Post tags: '
+        def tags = it.readLine()
+        def post = new File("${cfg.postFiles}/${name}.md")
+        def date = cfg.inFormatter.format(new Date())
+        post << "$title\n$date\n$date\n$tags\n\n"
+    }
+    System.exit(0);
+}
+
 
 def posts = []
 def tags = []

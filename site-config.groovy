@@ -1,6 +1,5 @@
 site {
-	url = "http://localhost:1234"
-//	url = "http://www.garmash.org"
+	url = "http://www.garmash.org"
 	base = ""
 	name = "Max Garmash"
     googleAnalyticsEnabled = true
