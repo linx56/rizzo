@@ -1,9 +1,9 @@
 <entry>
     <title>${post.title}</title>
-    <id>tag:${config.site.url},${config.feedFormatter.format(post.dateCreated)}:/${post.name}/</id>
-    <published>${config.feedFormatter.format(post.dateCreated)}</published>
-    <updated>${config.feedFormatter.format(post.lastUpdated)}</updated>
-    <link href="${config.createPostLink(post)}"/>
+    <id>tag:${config.site.url},${config.rfc3339Format(post.dateCreated)}:/${post.name}/</id>
+    <published>${config.rfc3339Format(post.dateCreated)}</published>
+    <updated>${config.rfc3339Format(post.lastUpdated)}</updated>
+    <link href="${config.site.url}${config.createPostLink(post)}"/>
     <summary>${post.summary}</summary>
     <content type="html">
 	    ${post.content}

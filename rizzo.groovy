@@ -59,8 +59,14 @@ cfg.yearFormatter = new SimpleDateFormat("yyyy")
 cfg.monthFormatter = new SimpleDateFormat("MM")
 cfg.inFormatter = cfg.inFormatter ?: new SimpleDateFormat("dd-MM-yyyy HH:mm")
 cfg.outFormatter = cfg.outFormatter ?: new SimpleDateFormat("dd.MM.yyyy")
-cfg.feedFormatter = cfg.feedFormatter ?: new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
 cfg.itemIdDateFormatter = cfg.itemIdDateFormatter ?: new SimpleDateFormat("yyyy-MM-dd")
+cfg.base3339DateFormatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
+cfg.zoneDateFormatter = new SimpleDateFormat("Z")
+
+cfg.rfc3339Format = { date ->
+    def zone = cfg.zoneDateFormatter.format(date)
+    cfg.base3339DateFormatter.format(date) + zone[0..2] + ':' + zone[3..4]
+}
 cfg.createPostLink = { post ->
     cfg.site.base+'/' + cfg.createPostPath(post)
 }
