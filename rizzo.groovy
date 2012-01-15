@@ -62,13 +62,13 @@ cfg.outFormatter = cfg.outFormatter ?: new SimpleDateFormat("dd.MM.yyyy")
 cfg.feedFormatter = cfg.feedFormatter ?: new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
 cfg.itemIdDateFormatter = cfg.itemIdDateFormatter ?: new SimpleDateFormat("yyyy-MM-dd")
 cfg.createPostLink = { post ->
-    cfg.site.base+'/'+cfg.createPostPath(post)
+    cfg.site.base+'/' + cfg.createPostPath(post)
 }
 cfg.createPostPath = { post ->
     "${cfg.yearFormatter.format(post.dateCreated)}/${cfg.monthFormatter.format(post.dateCreated)}/${post.name}"
 }
 cfg.createTagLink = { tag ->
-    cfg.site.base+'/tags/'+tag.name+'/'
+    cfg.site.base + '/tags/' + tag.name + '/'
 }
 
 def charTable = ['а':'a', 'б':'b', 'в':'v', 'г':'g', 'д':'d', 'е':'e','ё':'e', 'ж':'zh', 'з':'z', 'и':"i", 'й':'i',
