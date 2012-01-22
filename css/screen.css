@@ -172,3 +172,11 @@ table {
 .tagdate {
     padding-right: 10px;
 }
+
+ul {
+    margin-left: 20px;
+}
+
+ol {
+    margin-left: 20px;
+}
